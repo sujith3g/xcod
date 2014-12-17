@@ -46,6 +46,7 @@ module.exports = DocxGen = (function() {
       if (this.options.parser != null) {
         this.parser = options.parser;
       }
+    
     }
     return this;
   };
@@ -76,6 +77,9 @@ module.exports = DocxGen = (function() {
         };
       })(this);
     }
+      if(options.varTags != null){
+        DocUtils.tags = options.varTags;
+      }
     DocUtils.loadDoc(path, options);
     if (options.async === false) {
       return this;
