@@ -9,6 +9,8 @@ DocUtils = require('./docUtils');
 
 ImgManager = require('./imgManager');
 
+LinkManager = require('./LinkManager');
+
 DocXTemplater = require('./docxTemplater');
 
 JSZip = require('jszip');
@@ -36,17 +38,15 @@ module.exports = DocxGen = (function() {
   }
 
   DocxGen.prototype.setOptions = function(options) {
-    this.options = options;
-    if (this.options != null) {
-      this.intelligentTagging = this.options.intelligentTagging != null ? this.options.intelligentTagging : true;
-      this.qrCode = this.options.qrCode != null ? this.options.qrCode : false;
-      if (this.qrCode === true) {
-        this.qrCode = DocUtils.unsecureQrCode;
-      }
-      if (this.options.parser != null) {
-        this.parser = options.parser;
-      }
-    
+    this.options = options != null ? options : {};
+    this.intelligentTagging = this.options.intelligentTagging != null ? this.options.intelligentTagging : true;
+    this.qrCode = this.options.qrCode != null ? this.options.qrCode : false;
+    this.replaceLinks = this.options.replaceLinks != null ? this.options.replaceLinks : false;
+    if (this.qrCode === true) {
+      this.qrCode = DocUtils.unsecureQrCode;
+    }
+    if (this.options.parser != null) {
+      this.parser = options.parser;
     }
     return this;
   };
@@ -72,14 +72,17 @@ module.exports = DocxGen = (function() {
     if (options.callback == null) {
       options.callback = (function(_this) {
         return function(rawData) {
+          if (rawData === true) {
+            throw new Error("File `" + path + "` was not Found");
+          }
           _this.load(rawData);
           return promise.successFun(_this);
         };
       })(this);
     }
-      if(options.varTags != null){
-        DocUtils.tags = options.varTags;
-      }
+    if(options.varTags != null){
+      DocUtils.tags = options.varTags;
+    }
     DocUtils.loadDoc(path, options);
     if (options.async === false) {
       return this;
@@ -88,15 +91,15 @@ module.exports = DocxGen = (function() {
     }
   };
 
-  DocxGen.prototype.qrCodeCallBack = function(num, add) {
+  DocxGen.prototype.qrCodeCallBack = function(id, add) {
     var index;
     if (add == null) {
       add = true;
     }
     if (add === true) {
-      this.qrCodeWaitingFor.push(num);
+      this.qrCodeWaitingFor.push(id);
     } else if (add === false) {
-      index = this.qrCodeWaitingFor.indexOf(num);
+      index = this.qrCodeWaitingFor.indexOf(id);
       this.qrCodeWaitingFor.splice(index, 1);
     }
     return this.testReady();
@@ -109,33 +112,15 @@ module.exports = DocxGen = (function() {
     }
   };
 
-  DocxGen.prototype.getImageList = function() {
-    return this.imgManager.getImageList();
-  };
-
-  DocxGen.prototype.setImage = function(path, data, options) {
-    if (options == null) {
-      options = {};
-    }
-    if (options.binary == null) {
-      options.binary = true;
-    }
-    return this.imgManager.setImage(path, data, options);
-  };
-
   DocxGen.prototype.load = function(content) {
     this.loadedContent = content;
     this.zip = new JSZip(content);
-    this.imgManager = (new ImgManager(this.zip)).loadImageRels();
     return this;
   };
 
-  DocxGen.prototype.applyTags = function(Tags, qrCodeCallback) {
-    var currentFile, fileName, _i, _j, _len, _len1;
+  DocxGen.prototype.applyTags = function(Tags) {
+    var currentFile, fileName, imgManager, _i, _j, _len, _len1;
     this.Tags = Tags != null ? Tags : this.Tags;
-    if (qrCodeCallback == null) {
-      qrCodeCallback = null;
-    }
     for (_i = 0, _len = templatedFiles.length; _i < _len; _i++) {
       fileName = templatedFiles[_i];
       if (this.zip.files[fileName] == null) {
@@ -147,12 +132,17 @@ module.exports = DocxGen = (function() {
       if (!(this.zip.files[fileName] != null)) {
         continue;
       }
+      imgManager = new ImgManager(this.zip, fileName);
+      imgManager.loadImageRels();
+      linkManager = new LinkManager(this.zip, fileName);
       currentFile = new DocXTemplater(this.zip.files[fileName].asText(), {
         DocxGen: this,
         Tags: this.Tags,
         intelligentTagging: this.intelligentTagging,
-        qrCodeCallback: qrCodeCallback,
-        parser: this.parser
+        parser: this.parser,
+        imgManager: imgManager,
+        linkManager: linkManager,
+        fileName: fileName
       });
       this.setData(fileName, currentFile.applyTags().content);
       this.filesProcessed++;
@@ -164,7 +154,6 @@ module.exports = DocxGen = (function() {
     if (options == null) {
       options = {};
     }
-    this.zip.remove(fileName);
     return this.zip.file(fileName, data, options);
   };
 
@@ -212,8 +201,12 @@ module.exports = DocxGen = (function() {
     if (options.type == null) {
       options.type = "base64";
     }
+    if (options.compression == null) {
+      options.compression = "DEFLATE";
+    }
     result = this.zip.generate({
-      type: options.type
+      type: options.type,
+      compression: options.compression
     });
     if (options.download) {
       if (DocUtils.env === 'node') {
@@ -250,7 +243,9 @@ module.exports = DocxGen = (function() {
     if (filename == null) {
       filename = "default.docx";
     }
-    output = this.zip.generate();
+    output = this.zip.generate({
+      compression: "DEFLATE"
+    });
     return Downloadify.create('downloadify', {
       filename: function() {
         return filename;

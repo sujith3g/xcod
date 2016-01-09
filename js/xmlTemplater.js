@@ -12,6 +12,8 @@ XmlMatcher = require('./xmlMatcher');
 
 ImgReplacer = require('./imgReplacer');
 
+LinkReplacer = require('./linkReplacer');
+
 module.exports = XmlTemplater = (function() {
   function XmlTemplater(content, options) {
     if (content == null) {
@@ -24,7 +26,6 @@ module.exports = XmlTemplater = (function() {
     this.currentClass = XmlTemplater;
     this.fromJson(options);
     this.templaterState = new TemplaterState;
-    this.currentScope = this.Tags;
   }
 
   XmlTemplater.prototype.load = function(content) {
@@ -43,10 +44,15 @@ module.exports = XmlTemplater = (function() {
     this.DocxGen = options.DocxGen != null ? options.DocxGen : null;
     this.intelligentTagging = options.intelligentTagging != null ? options.intelligentTagging : false;
     this.scopePath = options.scopePath != null ? options.scopePath : [];
+    this.scopeList = options.scopeList != null ? options.scopeList : [this.Tags];
     this.usedTags = options.usedTags != null ? options.usedTags : {};
     this.imageId = options.imageId != null ? options.imageId : 0;
     this.parser = options.parser != null ? options.parser : DocUtils.defaultParser;
-    return this.scopeManager = new ScopeManager(this.Tags, this.scopePath, this.usedTags, this.Tags, this.parser);
+    this.fileName = options.fileName;
+    this.scopeManager = new ScopeManager(this.Tags, this.scopePath, this.usedTags, this.scopeList, this.parser);
+    this.linkManager = options.linkManager;
+    this.replaceLinks = options.replaceLinks;
+    return this.imgManager = options.imgManager;
   };
 
   XmlTemplater.prototype.toJson = function() {
@@ -55,10 +61,14 @@ module.exports = XmlTemplater = (function() {
       DocxGen: this.DocxGen,
       intelligentTagging: DocUtils.clone(this.intelligentTagging),
       scopePath: DocUtils.clone(this.scopeManager.scopePath),
+      scopeList: DocUtils.clone(this.scopeManager.scopeList),
       usedTags: this.scopeManager.usedTags,
       localImageCreator: this.localImageCreator,
       imageId: this.imageId,
-      parser: this.parser
+      parser: this.parser,
+      imgManager: this.imgManager,
+      linkManager: this.linkManager,
+      fileName: this.fileName
     };
   };
 
@@ -103,6 +113,7 @@ module.exports = XmlTemplater = (function() {
           'numXmlTag': numXmlTag,
           'numCharacter': numCharacter
         };
+        this.templaterState.context += character;
         _ref1 = this.templaterState.matches;
         for (t = _k = 0, _len2 = _ref1.length; _k < _len2; t = ++_k) {
           m = _ref1[t];
@@ -135,51 +146,38 @@ module.exports = XmlTemplater = (function() {
     if ((this.DocxGen != null) && this.DocxGen.qrCode !== false) {
       new ImgReplacer(this).findImages().replaceImages();
     }
+    if ((this.DocxGen != null) && this.DocxGen.replaceLinks ){
+      console.log("here");
+      this.linkManager.loadRels();
+      new LinkReplacer(this).findLinks().replaceLinks();
+    }
     return this;
   };
 
   XmlTemplater.prototype.replaceSimpleTag = function() {
     var newValue;
     newValue = this.scopeManager.getValueFromScope(this.templaterState.textInsideTag);
-    this.content = this.replaceTagByValue(DocUtils.utf8ToWord(newValue));
-    return this.content;
+    return this.content = this.replaceTagByValue(DocUtils.utf8ToWord(newValue), this.content);
   };
 
   XmlTemplater.prototype.replaceSimpleTagRawXml = function() {
     var newText, subContent;
     subContent = new SubContent(this.content).getInnerTag(this.templaterState).getOuterXml('w:p');
     newText = this.scopeManager.getValueFromScope(this.templaterState.tag);
-    this.templaterState.moveCharacters(this.templaterState.tagStart.numXmlTag, newText, subContent.text);
+    this.templaterState.moveCharacters(this.templaterState.tagStart.numXmlTag, newText.length, subContent.text.length);
     return this.content = subContent.replace(newText).fullText;
   };
 
-  XmlTemplater.prototype.deleteOuterTags = function(outerXmlText, sharp) {
+  XmlTemplater.prototype.deleteTag = function(xml, tag) {
     var xmlText;
-    this.templaterState.tagEnd = {
-      "numXmlTag": this.templaterState.loopOpen.end.numXmlTag,
-      "numCharacter": this.templaterState.loopOpen.end.numCharacter
-    };
-    this.templaterState.tagStart = {
-      "numXmlTag": this.templaterState.loopOpen.start.numXmlTag,
-      "numCharacter": this.templaterState.loopOpen.start.numCharacter
-    };
-    if (sharp === false) {
-      this.templaterState.textInsideTag = "-" + this.templaterState.loopOpen.element + " " + this.templaterState.loopOpen.tag;
-    }
-    if (sharp === true) {
-      this.templaterState.textInsideTag = "#" + this.templaterState.loopOpen.tag;
-    }
-    xmlText = this.replaceTagByValue("", outerXmlText);
-    this.templaterState.tagEnd = {
-      "numXmlTag": this.templaterState.loopClose.end.numXmlTag,
-      "numCharacter": this.templaterState.loopClose.end.numCharacter
-    };
-    this.templaterState.tagStart = {
-      "numXmlTag": this.templaterState.loopClose.start.numXmlTag,
-      "numCharacter": this.templaterState.loopClose.start.numCharacter
-    };
-    this.templaterState.textInsideTag = "/" + this.templaterState.loopOpen.tag;
-    return this.replaceTagByValue("", xmlText);
+    this.templaterState.tagStart = tag.start;
+    this.templaterState.tagEnd = tag.end;
+    this.templaterState.textInsideTag = tag.raw;
+    return xmlText = this.replaceTagByValue("", xml);
+  };
+
+  XmlTemplater.prototype.deleteOuterTags = function(outerXmlText) {
+    return this.deleteTag(this.deleteTag(outerXmlText, this.templaterState.loopOpen), this.templaterState.loopClose);
   };
 
   XmlTemplater.prototype.dashLoop = function(elementDashLoop, sharp) {
@@ -188,8 +186,8 @@ module.exports = XmlTemplater = (function() {
       sharp = false;
     }
     _ref = this.templaterState.findOuterTagsContent(this.content), _ = _ref._, start = _ref.start, end = _ref.end;
-    outerXml = this.getOuterXml(this.content, start, end, elementDashLoop);
-    this.templaterState.moveCharacters(0, "", outerXml.startTag);
+    outerXml = DocUtils.getOuterXml(this.content, start, end, elementDashLoop);
+    this.templaterState.moveCharacters(0, 0, outerXml.startTag);
     outerXmlText = outerXml.text;
     innerXmlText = this.deleteOuterTags(outerXmlText, sharp);
     return this.forLoop(innerXmlText, outerXmlText);
@@ -223,7 +221,7 @@ module.exports = XmlTemplater = (function() {
     replacer = this.xmlToBeReplaced(noStartTag, spacePreserve, insideValue, xmlTagNumber, noEndTag);
     this.templaterState.matches[xmlTagNumber][2] = insideValue;
     startTag = this.templaterState.calcXmlTagPosition(xmlTagNumber);
-    this.templaterState.moveCharacters(xmlTagNumber + 1, replacer, this.templaterState.matches[xmlTagNumber][0]);
+    this.templaterState.moveCharacters(xmlTagNumber + 1, replacer.length, this.templaterState.matches[xmlTagNumber][0].length);
     if (content.indexOf(this.templaterState.matches[xmlTagNumber][0]) === -1) {
       throw new Error("content " + this.templaterState.matches[xmlTagNumber][0] + " not found in content");
     }
@@ -233,36 +231,33 @@ module.exports = XmlTemplater = (function() {
   };
 
   XmlTemplater.prototype.replaceTagByValue = function(newValue, content) {
-    var eTag, k, options, regexLeft, regexRight, sTag, subMatches, _i, _ref, _ref1;
-    if (content == null) {
-      content = this.content;
+    var eTag, k, leftValue, options, sInnerContent, sTag, _i, _ref, _ref1;
+    if ((this.templaterState.innerContent('tagEnd').indexOf(DocUtils.tags.end)) === -1) {
+      throw new Error("no closing tag at @templaterState.tagEnd.numXmlTag " + (this.templaterState.innerContent('tagEnd')));
     }
-    if ((this.templaterState.matches[this.templaterState.tagEnd.numXmlTag][2].indexOf(DocUtils.tags.end)) === -1) {
-      throw new Error("no closing tag at @templaterState.tagEnd.numXmlTag " + this.templaterState.matches[this.templaterState.tagEnd.numXmlTag][2]);
-    }
-    if ((this.templaterState.matches[this.templaterState.tagStart.numXmlTag][2].indexOf(DocUtils.tags.start)) === -1) {
-      throw new Error("no opening tag at @templaterState.tagStart.numXmlTag " + this.templaterState.matches[this.templaterState.tagStart.numXmlTag][2]);
+    if ((this.templaterState.innerContent('tagStart').indexOf(DocUtils.tags.start)) === -1) {
+      throw new Error("no opening tag at @templaterState.tagStart.numXmlTag " + (this.templaterState.innerContent('tagStart')));
     }
     sTag = DocUtils.tags.start;
     eTag = DocUtils.tags.end;
     if (this.templaterState.tagEnd.numXmlTag === this.templaterState.tagStart.numXmlTag) {
       options = {
         xmlTagNumber: this.templaterState.tagStart.numXmlTag,
-        insideValue: this.templaterState.matches[this.templaterState.tagStart.numXmlTag][2].replace("" + sTag + this.templaterState.textInsideTag + eTag, newValue),
-        noStartTag: (this.templaterState.matches[this.templaterState.tagStart.numXmlTag].first != null) || (this.templaterState.matches[this.templaterState.tagStart.numXmlTag].last != null)
+        insideValue: this.templaterState.innerContent('tagStart').replace("" + sTag + this.templaterState.textInsideTag + eTag, newValue),
+        noStartTag: this.templaterState.matches[this.templaterState.tagStart.numXmlTag].first != null,
+        noEndTag: this.templaterState.matches[this.templaterState.tagStart.numXmlTag].last != null
       };
-      content = this.replaceXmlTag(content, options);
+      return this.replaceXmlTag(content, options);
     } else if (this.templaterState.tagEnd.numXmlTag > this.templaterState.tagStart.numXmlTag) {
-      regexRight = new RegExp("^([^" + sTag + "]*)" + sTag + ".*$");
-      subMatches = this.templaterState.matches[this.templaterState.tagStart.numXmlTag][2].match(regexRight);
+      sInnerContent = this.templaterState.innerContent('tagStart');
+      leftValue = sInnerContent.substr(0, sInnerContent.indexOf(sTag));
       options = {
-        xmlTagNumber: this.templaterState.tagStart.numXmlTag
+        xmlTagNumber: this.templaterState.tagStart.numXmlTag,
+        noStartTag: this.templaterState.matches[this.templaterState.tagStart.numXmlTag].first != null
       };
+      options.insideValue = newValue;
       if ((this.templaterState.matches[this.templaterState.tagStart.numXmlTag].first == null) && (this.templaterState.matches[this.templaterState.tagStart.numXmlTag].last == null)) {
-        options.insideValue = subMatches[1] + newValue;
-      } else {
-        options.insideValue = newValue;
-        options.noStartTag = this.templaterState.matches[this.templaterState.tagStart.numXmlTag].first != null;
+        options.insideValue = leftValue + newValue;
       }
       content = this.replaceXmlTag(content, options);
       options = {
@@ -273,16 +268,16 @@ module.exports = XmlTemplater = (function() {
         options.xmlTagNumber = k;
         content = this.replaceXmlTag(content, options);
       }
-      regexLeft = new RegExp("^[^" + eTag + "]*" + eTag + "(.*)$");
+      sInnerContent = this.templaterState.innerContent('tagEnd');
+      leftValue = sInnerContent.substr(sInnerContent.indexOf(eTag) + 1);
       options = {
-        insideValue: this.templaterState.matches[this.templaterState.tagEnd.numXmlTag][2].replace(regexLeft, '$1'),
+        insideValue: leftValue,
         spacePreserve: true,
         xmlTagNumber: k,
         noEndTag: (this.templaterState.matches[this.templaterState.tagStart.numXmlTag].last != null) || (this.templaterState.matches[this.templaterState.tagStart.numXmlTag].first != null)
       };
-      content = this.replaceXmlTag(content, options);
+      return this.replaceXmlTag(content, options);
     }
-    return content;
   };
 
   XmlTemplater.prototype.replaceLoopTag = function() {
@@ -305,6 +300,7 @@ module.exports = XmlTemplater = (function() {
     if (argOptions != null) {
       if (argOptions.Tags != null) {
         options.Tags = argOptions.Tags;
+        options.scopeList = options.scopeList.concat(argOptions.Tags);
         options.scopePath = options.scopePath.concat(this.templaterState.loopOpen.tag);
       }
     }
@@ -312,24 +308,6 @@ module.exports = XmlTemplater = (function() {
     subsubfile = subfile.applyTags();
     this.imageId = subfile.imageId;
     return subsubfile;
-  };
-
-  XmlTemplater.prototype.getOuterXml = function(text, start, end, xmlTag) {
-    var endTag, startTag;
-    endTag = text.indexOf('</' + xmlTag + '>', end);
-    if (endTag === -1) {
-      throw new Error("can't find endTag " + endTag);
-    }
-    endTag += ('</' + xmlTag + '>').length;
-    startTag = Math.max(text.lastIndexOf('<' + xmlTag + '>', start), text.lastIndexOf('<' + xmlTag + ' ', start));
-    if (startTag === -1) {
-      throw new Error("can't find startTag");
-    }
-    return {
-      "text": text.substr(startTag, endTag - startTag),
-      startTag: startTag,
-      endTag: endTag
-    };
   };
 
   XmlTemplater.prototype.forLoop = function(innerTagsContent, outerTagsContent) {

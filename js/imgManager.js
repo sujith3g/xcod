@@ -8,8 +8,10 @@ module.exports = ImgManager = (function() {
 
   imageExtensions = ['gif', 'jpeg', 'jpg', 'emf', 'png'];
 
-  function ImgManager(zip) {
+  function ImgManager(zip, fileName) {
     this.zip = zip;
+    this.fileName = fileName;
+    this.endFileName = this.fileName.replace(/^.*?([a-z0-9]+)\.xml$/, "$1");
   }
 
   ImgManager.prototype.getImageList = function() {
@@ -37,8 +39,12 @@ module.exports = ImgManager = (function() {
   };
 
   ImgManager.prototype.loadImageRels = function() {
-    var RidArray, content, tag;
-    content = DocUtils.decode_utf8(this.zip.files["word/_rels/document.xml.rels"].asText());
+    var RidArray, content, file, tag;
+    file = this.zip.files["word/_rels/" + this.endFileName + ".xml.rels"];
+    if (file === void 0) {
+      return;
+    }
+    content = DocUtils.decode_utf8(file.asText());
     this.xmlDoc = DocUtils.Str2xml(content);
     RidArray = (function() {
       var _i, _len, _ref, _results;
@@ -78,15 +84,18 @@ module.exports = ImgManager = (function() {
     }
   };
 
-  ImgManager.prototype.addImageRels = function(imageName, imageData) {
-    var extension, file, newTag, relationships;
-    if (this.zip.files["word/media/" + imageName] != null) {
-      throw new Error('file already exists');
-      return false;
+  ImgManager.prototype.addImageRels = function(imageName, imageData, i) {
+    var extension, file, newTag, realImageName, relationships;
+    if (i == null) {
+      i = 0;
+    }
+    realImageName = i === 0 ? imageName : imageName + ("(" + i + ")");
+    if (this.zip.files["word/media/" + realImageName] != null) {
+      return this.addImageRels(imageName, imageData, i + 1);
     }
     this.maxRid++;
     file = {
-      'name': "word/media/" + imageName,
+      'name': "word/media/" + realImageName,
       'data': imageData,
       'options': {
         base64: false,
@@ -97,16 +106,16 @@ module.exports = ImgManager = (function() {
       }
     };
     this.zip.file(file.name, file.data, file.options);
-    extension = imageName.replace(/[^.]+\.([^.]+)/, '$1');
+    extension = realImageName.replace(/[^.]+\.([^.]+)/, '$1');
     this.addExtensionRels("image/" + extension, extension);
     relationships = this.xmlDoc.getElementsByTagName("Relationships")[0];
     newTag = this.xmlDoc.createElement('Relationship');
     newTag.namespaceURI = null;
     newTag.setAttribute('Id', "rId" + this.maxRid);
     newTag.setAttribute('Type', 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image');
-    newTag.setAttribute('Target', "media/" + imageName);
+    newTag.setAttribute('Target', "media/" + realImageName);
     relationships.appendChild(newTag);
-    this.setImage("word/_rels/document.xml.rels", DocUtils.encode_utf8(DocUtils.xml2Str(this.xmlDoc)));
+    this.setImage("word/_rels/" + this.endFileName + ".xml.rels", DocUtils.encode_utf8(DocUtils.xml2Str(this.xmlDoc)));
     return this.maxRid;
   };
 

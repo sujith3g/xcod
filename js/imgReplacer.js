@@ -39,25 +39,30 @@ module.exports = ImgReplacer = (function() {
     }
     docxqrCode.callbacked = true;
     docxqrCode.xmlTemplater.numQrCode--;
-    docxqrCode.xmlTemplater.DocxGen.setImage("word/media/" + docxqrCode.imgName, docxqrCode.data);
-    return docxqrCode.xmlTemplater.DocxGen.qrCodeCallBack(docxqrCode.num, false);
+    docxqrCode.xmlTemplater.imgManager.setImage("word/media/" + docxqrCode.imgName, docxqrCode.data, {
+      binary: true
+    });
+    return docxqrCode.xmlTemplater.DocxGen.qrCodeCallBack(docxqrCode.xmlTemplater.fileName + '-' + docxqrCode.num, false);
   };
 
   ImgReplacer.prototype.replaceImage = function(match, u) {
     var e, imageTag, imgName, mockedQrCode, newId, oldFile, rId, replacement, tag, tagrId, xmlImg;
-    xmlImg = DocUtils.Str2xml('<?xml version="1.0" ?><w:document mc:Ignorable="w14 wp14" xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:w10="urn:schemas-microsoft-com:office:word" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" xmlns:wne="http://schemas.microsoft.com/office/word/2006/wordml" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:wp14="http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing" xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas" xmlns:wpg="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup" xmlns:wpi="http://schemas.microsoft.com/office/word/2010/wordprocessingInk" xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape">' + match[0] + '</w:document>');
+    try {
+      xmlImg = DocUtils.Str2xml('<?xml version="1.0" ?><w:document mc:Ignorable="w14 wp14" xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:w10="urn:schemas-microsoft-com:office:word" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" xmlns:wne="http://schemas.microsoft.com/office/word/2006/wordml" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:wp14="http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing" xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas" xmlns:wpg="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup" xmlns:wpi="http://schemas.microsoft.com/office/word/2010/wordprocessingInk" xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape">' + match[0] + '</w:document>', function(_i, type) {
+        if (_i === 'fatalError') {
+          throw "fatalError";
+        }
+      });
+    } catch (_error) {
+      e = _error;
+      return;
+    }
     tagrId = xmlImg.getElementsByTagName("a:blip")[0];
     if (tagrId === void 0) {
       throw new Error('tagRiD undefined !');
     }
     rId = tagrId.getAttribute('r:embed');
-    try{
-       oldFile = this.xmlTemplater.DocxGen.imgManager.getImageByRid(rId);
-    }
-    catch(_error){
-      e = _error;
-      return;
-    }
+    oldFile = this.xmlTemplater.imgManager.getImageByRid(rId);
     tag = xmlImg.getElementsByTagName("wp:docPr")[0];
     if (tag === void 0) {
       throw new Error('tag undefined');
@@ -67,10 +72,12 @@ module.exports = ImgReplacer = (function() {
     }
     imgName = ("Copie_" + this.xmlTemplater.imageId + ".png").replace(/\x20/, "");
     this.xmlTemplater.DocxGen.qrCodeNumCallBack++;
-    this.xmlTemplater.DocxGen.qrCodeCallBack(this.xmlTemplater.DocxGen.qrCodeNumCallBack, true);
-    newId = this.xmlTemplater.DocxGen.imgManager.addImageRels(imgName, "");
+    this.xmlTemplater.DocxGen.qrCodeCallBack(this.xmlTemplater.fileName + '-' + this.xmlTemplater.DocxGen.qrCodeNumCallBack, true);
+    newId = this.xmlTemplater.imgManager.addImageRels(imgName, "");
     this.xmlTemplater.imageId++;
-    this.xmlTemplater.DocxGen.setImage("word/media/" + imgName, oldFile.data);
+    this.xmlTemplater.imgManager.setImage("word/media/" + imgName, oldFile.data, {
+      binary: true
+    });
     tag.setAttribute('name', "" + imgName);
     tagrId.setAttribute('r:embed', "rId" + newId);
     imageTag = xmlImg.getElementsByTagName('w:drawing')[0];

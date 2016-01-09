@@ -5,12 +5,6 @@ module.exports = TemplaterState = (function() {
 
   TemplaterState.prototype.moveCharacters = function(numXmlTag, newTextLength, oldTextLength) {
     var k, _i, _ref, _results;
-    if (typeof newTextLength !== 'number') {
-      return this.moveCharacters(numXmlTag, newTextLength.length, oldTextLength);
-    }
-    if (typeof oldTextLength !== 'number') {
-      return this.moveCharacters(numXmlTag, newTextLength, oldTextLength.length);
-    }
     _results = [];
     for (k = _i = numXmlTag, _ref = this.matches.length; numXmlTag <= _ref ? _i <= _ref : _i >= _ref; k = numXmlTag <= _ref ? ++_i : --_i) {
       _results.push(this.charactersAdded[k] += newTextLength - oldTextLength);
@@ -45,6 +39,10 @@ module.exports = TemplaterState = (function() {
     };
   };
 
+  TemplaterState.prototype.innerContent = function(type) {
+    return this.matches[this[type].numXmlTag][2];
+  };
+
   TemplaterState.prototype.findInnerTagsContent = function(content) {
     var end, start;
     start = this.calcEndTag(this.loopOpen);
@@ -57,6 +55,7 @@ module.exports = TemplaterState = (function() {
   };
 
   TemplaterState.prototype.initialize = function() {
+    this.context = "";
     this.inForLoop = false;
     this.loopIsInverted = false;
     this.inTag = false;
@@ -67,7 +66,7 @@ module.exports = TemplaterState = (function() {
 
   TemplaterState.prototype.startTag = function(char) {
     if (this.inTag === true) {
-      throw new Error("Tag already open with text: " + this.textInsideTag);
+      throw new Error("Unclosed tag : '" + this.textInsideTag + "'");
     }
     this.inTag = true;
     this.rawXmlTag = false;
@@ -95,7 +94,7 @@ module.exports = TemplaterState = (function() {
   TemplaterState.prototype.endTag = function() {
     var dashInnerRegex;
     if (this.inTag === false) {
-      throw new Error("Tag already closed");
+      throw new Error("Unopened tag near : '" + (this.context.substr(this.context.length - 10, 10)) + "'");
     }
     this.inTag = false;
     this.tagEnd = this.currentStep;
@@ -108,7 +107,8 @@ module.exports = TemplaterState = (function() {
       this.loopOpen = {
         'start': this.tagStart,
         'end': this.tagEnd,
-        'tag': this.textInsideTag.substr(1)
+        'tag': this.textInsideTag.substr(1),
+        'raw': this.textInsideTag
       };
     }
     if (this.textInsideTag[0] === '^' && this.loopType() === 'simple') {
@@ -117,23 +117,26 @@ module.exports = TemplaterState = (function() {
       this.loopOpen = {
         'start': this.tagStart,
         'end': this.tagEnd,
-        'tag': this.textInsideTag.substr(1)
+        'tag': this.textInsideTag.substr(1),
+        'raw': this.textInsideTag
       };
     }
     if (this.textInsideTag[0] === '-' && this.loopType() === 'simple') {
       this.inDashLoop = true;
-      dashInnerRegex = /^-([a-zA-Z_:]+) ([a-zA-Z_:]+)$/;
+      dashInnerRegex = /^-([^\s]+)\s(.+)$/;
       this.loopOpen = {
         'start': this.tagStart,
         'end': this.tagEnd,
         'tag': this.textInsideTag.replace(dashInnerRegex, '$2'),
-        'element': this.textInsideTag.replace(dashInnerRegex, '$1')
+        'element': this.textInsideTag.replace(dashInnerRegex, '$1'),
+        'raw': this.textInsideTag
       };
     }
     if (this.textInsideTag[0] === '/') {
       return this.loopClose = {
         'start': this.tagStart,
-        'end': this.tagEnd
+        'end': this.tagEnd,
+        'raw': this.textInsideTag
       };
     }
   };

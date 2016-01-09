@@ -53,10 +53,13 @@ module.exports = DocxQrCode = (function() {
     var cb;
     cb = (function(_this) {
       return function(err, data) {
-        _this.data = data;
+        _this.data = data != null ? data : _this.data;
         return _this.callback(_this, _this.imgName, _this.num);
       };
     })(this);
+    if (this.result == null) {
+      return cb();
+    }
     return this.xmlTemplater.DocxGen.qrCode(this.result, cb);
   };
 
