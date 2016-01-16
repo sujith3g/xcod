@@ -54,14 +54,20 @@ Installation: `npm install docxtemplater`
 
     var DocXTemplater= require('docxtemplater');
 
-    docxtemplater=new DocXTemplater().loadFromFile("tagExample.docx", {
+    docxtemplater=new DocXTemplater().loadFromFile("linkExample1.docx", {
+      "intelligentTagging":true,
       "replaceLinks": {
         "Nulla":"http://nulla.com",
         "Nunc":"http://nunc.com"
       }
     });
 
-    docxtemplater.setTags({"linkText":"Nulla"});
+    docxtemplater.setTags({
+      "links":[
+          {"link":"Nulla"},
+          {"link":"Nunc"}
+      ]
+    });
 
     //when finished
     docxtemplater.finishedCallback=function () {
@@ -71,7 +77,7 @@ Installation: `npm install docxtemplater`
     //apply the tags
     docxtemplater.applyTags();
 
-You can download [tagExample.docx](https://github.com/edi9999/docxtemplater/raw/master/examples/tagExample.docx) and put it in the same folder than your script.
+You can download [tagExample.docx](https://github.com/edi9999/docxtemplater/raw/master/examples/tagExample.docx),[linkExample1.docx](https://github.com/edi9999/docxtemplater/raw/master/examples/linkExample1.docx) and put it in the same folder than your script.
 
 ## Have 0.6.3 or less and using the qrcode module ? You probably have a security issue. See [upgrade.md](upgrade.md)
 
