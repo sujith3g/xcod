@@ -50,6 +50,27 @@ Installation: `npm install docxtemplater`
     //apply the tags
     docxtemplater.applyTags();
 
+    // ===== HyperLink Replacer Example ========//
+
+    var DocXTemplater= require('docxtemplater');
+
+    docxtemplater=new DocXTemplater().loadFromFile("tagExample.docx", {
+      "replaceLinks": {
+        "Nulla":"http://nulla.com",
+        "Nunc":"http://nunc.com"
+      }
+    });
+
+    docxtemplater.setTags({"linkText":"Nulla"});
+
+    //when finished
+    docxtemplater.finishedCallback=function () {
+        docxtemplater.output();
+    }
+
+    //apply the tags
+    docxtemplater.applyTags();
+
 You can download [tagExample.docx](https://github.com/edi9999/docxtemplater/raw/master/examples/tagExample.docx) and put it in the same folder than your script.
 
 ## Have 0.6.3 or less and using the qrcode module ? You probably have a security issue. See [upgrade.md](upgrade.md)
