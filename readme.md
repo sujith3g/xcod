@@ -4,6 +4,8 @@
 [![Download count](http://img.shields.io/npm/dm/xcod.svg)](https://www.npmjs.org/package/xcod)
 [![Current tag](http://img.shields.io/npm/v/xcod.svg)](https://www.npmjs.org/package/xcod)
 
+** A customized version of docxtemplater with HyperLink Replacer. **
+
 **docxtemplater** is a library to generate docx documents from a docx template. It can replace tags by their values and replace images with other images. It is very user oriented as users can without a lot of programming knowledge create their first template and automatically change variables in it.
 
 ## Documentation
