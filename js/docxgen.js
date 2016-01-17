@@ -9,7 +9,7 @@ DocUtils = require('./docUtils');
 
 ImgManager = require('./imgManager');
 
-LinkManager = require('./LinkManager');
+LinkManager = require('./linkManager');
 
 DocXTemplater = require('./docxTemplater');
 
