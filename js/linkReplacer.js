@@ -59,7 +59,7 @@ module.exports = LinkReplacer = (function() {
     if (rId === void 0) {
       throw new Error('RiD undefined !');
     }
-    console.log(this.xmlTemplater.DocxGen.replaceLinks);
+    //console.log(this.xmlTemplater.DocxGen.replaceLinks);
     newLink = this.xmlTemplater.DocxGen.replaceLinks[textInsideTag];
     if(newLink){
       newRid = this.xmlTemplater.linkManager.addLinkRels(newLink,1);

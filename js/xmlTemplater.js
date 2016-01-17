@@ -147,7 +147,7 @@ module.exports = XmlTemplater = (function() {
       new ImgReplacer(this).findImages().replaceImages();
     }
     if ((this.DocxGen != null) && this.DocxGen.replaceLinks ){
-      console.log("here");
+      //console.log("here");
       this.linkManager.loadRels();
       new LinkReplacer(this).findLinks().replaceLinks();
     }
